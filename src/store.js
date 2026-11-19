@@ -20,6 +20,8 @@ export function load() {
   }
   // Interrupted work from a previous run can't resume; mark it so it can be retried.
   for (const t of state.tasks) if (t.status === "running" || t.status === "queued") t.status = "interrupted";
+  state.debates ||= [];
+  for (const d of state.debates) if (d.status === "running") Object.assign(d, { status: "failed", error: "Interrupted by restart", speaker: null });
   return state;
 }
 

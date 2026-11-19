@@ -28,6 +28,7 @@
   <button data-tab="meetings">Sunday Meeting</button>
   <button data-tab="team">Levels</button>
   <button data-tab="skills">Skills Library</button>
+  <button data-tab="debate">Debate Room</button>
   <button data-tab="settings">Company</button>
 </nav>
 
@@ -84,6 +85,16 @@
   <section id="tab-team" class="tab">
     <div id="levels" class="levels"></div>
     <div id="leaderboard" class="list"></div>
+  </section>
+
+  <!-- DEBATE ROOM -->
+  <section id="tab-debate" class="tab">
+    <p class="muted" id="debate-help">On-demand only: ask Claude to run a debate (<code>npm run debate -- "your decision"</code>). Naruto always supports the decision, Sasuke challenges it until it's clear who's right, and the Judge rules.</p>
+    <div class="card court-wrap"><div id="court" class="court" data-speaker=""></div><p id="court-caption" class="court-caption muted"></p></div>
+    <div class="split">
+      <ul id="debate-list" class="index"></ul>
+      <article id="debate-view" class="doc card"></article>
+    </div>
   </section>
 
   <!-- SKILLS -->

@@ -144,6 +144,7 @@ export function initialState() {
     tasks: [],
     briefs: [],
     meetings: [],
+    debates: [],
     feed: [],
     schedule: { lastBriefDate: null, lastMeetingDate: null },
   };

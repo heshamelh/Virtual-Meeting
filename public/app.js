@@ -104,7 +104,7 @@ function render() {
   $("#company-mission").textContent = S.company.mission;
   document.title = `${S.company.name} · HQ`;
   $("#ai-badge").textContent = S.ai.enabled ? `🤖 ${S.ai.model}` : "🧪 simulation mode";
-  renderOffice(); renderTasks(); renderDocs("brief"); renderDocs("meeting"); renderTeam(); renderSkills(); renderSettings();
+  renderOffice(); renderTasks(); renderDocs("brief"); renderDocs("meeting"); renderTeam(); renderSkills(); renderSettings(); renderDebate();
   // Don't clobber what the user is typing/choosing inside the dialog.
   const typing = $("#emp-dialog").contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if (ui.empOpen && !typing) renderEmp(ui.empOpen);
@@ -313,6 +313,128 @@ function renderSettings() {
   if (f.contains(document.activeElement) || f.dataset.loaded) return;
   f.name.value = S.company.name; f.mission.value = S.company.mission; f.priorities.value = S.company.priorities.join("\n");
   f.dataset.loaded = "1";
+}
+
+// ------------------------------------------------------------ debate room
+// Original character designs (not the anime's): Naruto = sunny supporter with a thumbs-up,
+// Sasuke = sharp challenger in a blazer and glasses, Judge = robe, wig and gavel.
+// Whoever is speaking animates; everyone else sits still. The gavel bangs on the verdict.
+
+const COURT_SVG = `<svg viewBox="0 0 480 230" class="court-svg" role="img" aria-label="Debate room with Naruto, the Judge and Sasuke">
+  <rect x="0" y="0" width="480" height="210" class="wall"/>
+  <rect x="0" y="210" width="480" height="20" class="floor"/>
+  <!-- Judge -->
+  <g class="p judge">
+    <g class="bubble"><rect x="262" y="8" width="44" height="20" rx="10"/><circle cx="276" cy="18" r="2.2"/><circle cx="284" cy="18" r="2.2"/><circle cx="292" cy="18" r="2.2"/></g>
+    <rect x="212" y="72" width="56" height="50" rx="18" fill="#15171c"/>
+    <path d="M232 74 L240 88 L248 74 Z" fill="#f5f5f5"/>
+    <g class="head">
+      <circle cx="223" cy="48" r="7" class="wig"/><circle cx="257" cy="48" r="7" class="wig"/>
+      <circle cx="222" cy="60" r="6" class="wig"/><circle cx="258" cy="60" r="6" class="wig"/>
+      <circle cx="240" cy="54" r="17" fill="#e0ac69"/>
+      <path d="M224 46 Q240 28 256 46 Q248 38 240 39 Q232 38 224 46 Z" class="wig"/>
+      <circle cx="234" cy="52" r="1.8" fill="#0d1117"/><circle cx="246" cy="52" r="1.8" fill="#0d1117"/>
+      <path d="M231 46 h6 M243 46 h6" stroke="#0d1117" stroke-width="1.6" stroke-linecap="round"/>
+      <path class="m-closed" d="M235 62 h10" stroke="#0d1117" stroke-width="1.6" stroke-linecap="round"/>
+      <ellipse class="m-open" cx="240" cy="62.5" rx="4" ry="2.6" fill="#5a1d1d"/>
+    </g>
+    <g class="gavel">
+      <line x1="262" y1="90" x2="292" y2="104" stroke="#15171c" stroke-width="9" stroke-linecap="round"/>
+      <line x1="292" y1="104" x2="306" y2="86" stroke="#a0522d" stroke-width="3" stroke-linecap="round"/>
+      <rect x="298" y="76" width="18" height="10" rx="2" fill="#7a3e1d" transform="rotate(38 307 81)"/>
+      <circle cx="292" cy="104" r="5" fill="#e0ac69"/>
+    </g>
+    <g class="bang"><path d="M296 118 l-8 6 M312 118 l8 6 M304 116 v-8" stroke="#ffd33d" stroke-width="2.5" stroke-linecap="round"/></g>
+  </g>
+  <rect x="160" y="112" width="160" height="10" rx="2" class="wood-top"/>
+  <rect x="170" y="122" width="140" height="88" class="wood"/>
+  <rect x="294" y="106" width="22" height="6" rx="1" fill="#5c3317"/>
+  <circle cx="240" cy="166" r="20" class="seal"/><text x="240" y="174" text-anchor="middle" font-size="22">⚖️</text>
+
+  <!-- Naruto: the Supporter -->
+  <g class="p naruto">
+    <g class="bubble"><rect x="98" y="16" width="44" height="20" rx="10"/><circle cx="112" cy="26" r="2.2"/><circle cx="120" cy="26" r="2.2"/><circle cx="128" cy="26" r="2.2"/></g>
+    <g class="bodyg">
+      <rect x="56" y="100" width="48" height="48" rx="18" fill="#f2c94c"/>
+      <path d="M68 102 Q80 112 92 102" stroke="#2bb3a3" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <g class="head">
+        <circle cx="80" cy="80" r="19" fill="#f1c27d"/>
+        <path d="M61 78 Q60 58 80 58 Q100 58 99 78 Q94 68 88 70 Q84 64 78 68 Q70 64 66 72 Z" fill="#7b4a2a"/>
+        <circle cx="73" cy="80" r="2" fill="#0d1117"/><circle cx="87" cy="80" r="2" fill="#0d1117"/>
+        <circle cx="68" cy="87" r="3" fill="#f4978e" opacity=".7"/><circle cx="92" cy="87" r="3" fill="#f4978e" opacity=".7"/>
+        <path class="m-closed" d="M72 88 Q80 95 88 88" stroke="#0d1117" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+        <ellipse class="m-open" cx="80" cy="90" rx="5" ry="3.5" fill="#5a1d1d"/>
+      </g>
+      <g class="thumb">
+        <line x1="100" y1="112" x2="118" y2="94" stroke="#f2c94c" stroke-width="10" stroke-linecap="round"/>
+        <circle cx="120" cy="91" r="6.5" fill="#f1c27d"/><rect x="117.5" y="76" width="5" height="12" rx="2.5" fill="#f1c27d"/>
+      </g>
+    </g>
+  </g>
+  <rect x="34" y="140" width="92" height="9" rx="2" class="wood-top"/>
+  <rect x="40" y="149" width="80" height="61" class="wood"/>
+  <text x="80" y="185" text-anchor="middle" class="podium-label">FOR</text>
+  <rect class="glow naruto-glow" x="30" y="136" width="100" height="78" rx="8"/>
+
+  <!-- Sasuke: the Challenger -->
+  <g class="p sasuke">
+    <g class="bubble"><rect x="338" y="14" width="44" height="20" rx="10"/><circle cx="352" cy="24" r="2.2"/><circle cx="360" cy="24" r="2.2"/><circle cx="368" cy="24" r="2.2"/></g>
+    <g class="bodyg">
+      <rect x="376" y="96" width="48" height="52" rx="14" fill="#34405e"/>
+      <path d="M392 98 L400 114 L408 98 Z" fill="#e6edf3"/><path d="M398 102 L400 118 L402 102 Z" fill="#8b1e3f"/>
+      <g class="head">
+        <circle cx="400" cy="76" r="18" fill="#c68642"/>
+        <path d="M382 74 Q381 56 400 56 Q419 56 418 72 L418 66 Q406 60 392 66 Q386 68 382 74 Z" fill="#9aa4b2"/>
+        <rect x="389" y="73" width="9" height="7" rx="2" fill="none" stroke="#0d1117" stroke-width="1.4"/>
+        <rect x="402" y="73" width="9" height="7" rx="2" fill="none" stroke="#0d1117" stroke-width="1.4"/>
+        <path d="M398 76 h4" stroke="#0d1117" stroke-width="1.4"/>
+        <circle cx="393.5" cy="76.5" r="1.5" fill="#0d1117"/><circle cx="406.5" cy="76.5" r="1.5" fill="#0d1117"/>
+        <path d="M389 69 l8 -1 M403 66 l8 2" stroke="#0d1117" stroke-width="1.6" stroke-linecap="round"/>
+        <path class="m-closed" d="M395 87 h10" stroke="#0d1117" stroke-width="1.6" stroke-linecap="round"/>
+        <ellipse class="m-open" cx="400" cy="87.5" rx="4" ry="2.6" fill="#5a1d1d"/>
+      </g>
+      <rect class="crossed" x="378" y="118" width="44" height="10" rx="5" fill="#27304a"/>
+      <g class="point">
+        <line x1="382" y1="108" x2="356" y2="98" stroke="#34405e" stroke-width="10" stroke-linecap="round"/>
+        <circle cx="352" cy="97" r="5.5" fill="#c68642"/><line x1="350" y1="96" x2="340" y2="94" stroke="#c68642" stroke-width="3.5" stroke-linecap="round"/>
+      </g>
+    </g>
+  </g>
+  <rect x="354" y="140" width="92" height="9" rx="2" class="wood-top"/>
+  <rect x="360" y="149" width="80" height="61" class="wood"/>
+  <text x="400" y="185" text-anchor="middle" class="podium-label">AGAINST</text>
+  <rect class="glow sasuke-glow" x="350" y="136" width="100" height="78" rx="8"/>
+</svg>`;
+
+function renderDebate() {
+  const court = $("#court");
+  if (!court.firstChild) court.innerHTML = COURT_SVG; // built once so animations never restart
+  const debates = S.debates || [];
+  const live = debates.find((d) => d.status === "running" || d.speaker);
+  const speaker = live?.speaker || "";
+  court.dataset.speaker = speaker;
+  court.dataset.winner = speaker === "verdict" ? live.verdict?.winner ?? "" : "";
+  const P = S.panel || {};
+  $("#court-caption").textContent = !live ? "The panel is seated. They only debate when you ask."
+    : speaker === "verdict" ? `🔨 The Judge rules: ${live.verdict.winner === "split" ? "split decision" : `${P[live.verdict.winner]?.name} is right`}`
+    : `${P[speaker]?.name ?? ""} is speaking — “${live.question}”`;
+
+  if (live && ui.debateFollow !== false) ui.debateId = live.id;
+  if (!debates.find((d) => d.id === ui.debateId)) ui.debateId = debates[0]?.id ?? null;
+  $("#debate-list").innerHTML = debates.map((d) => `<li><button data-id="${d.id}" class="${d.id === ui.debateId ? "active" : ""}">
+    ${d.status === "running" ? "🔴 " : d.verdict ? (d.verdict.winner === "naruto" ? "🟡 " : d.verdict.winner === "sasuke" ? "🔵 " : "⚪ ") : "❌ "}${esc(d.question.slice(0, 60))}</button></li>`).join("")
+    || `<li class="muted">No debates yet.</li>`;
+  $$("#debate-list button").forEach((b) => b.onclick = () => { ui.debateId = b.dataset.id; ui.debateFollow = false; renderDebate(); });
+
+  const d = debates.find((x) => x.id === ui.debateId);
+  if (!d) { $("#debate-view").innerHTML = `<p class="muted">Ask Claude: “run a debate on …”</p>`; return; }
+  const who = { naruto: "🟡 Naruto — supports", sasuke: "🔵 Sasuke — challenges", judge: "⚖️ Judge" };
+  $("#debate-view").innerHTML = `<h2>${esc(d.question)}</h2>
+    <p class="muted">${fmt(d.at)} · ${d.mode === "simulation" ? "🧪 simulation" : `Naruto & Sasuke: ${esc(prettyModel(P.naruto?.model))} · Judge: ${esc(prettyModel(P.judge?.model))}`}</p>
+    ${d.context ? `<details><summary class="muted">Background</summary><p>${esc(d.context)}</p></details>` : ""}
+    ${d.turns.map((t) => `<div class="turn turn-${t.who}"><h4>${who[t.who]}${t.round ? ` · round ${t.round}` : ""}</h4>${md(t.text.replace(/^(STATUS|WINNER):.*$/gim, "**$&**"))}</div>`).join("")}
+    ${d.status === "running" ? `<p class="muted">… ${esc(P[d.speaker]?.name ?? "")} is thinking</p>` : ""}
+    ${d.error ? `<p class="st-failed">Error: ${esc(d.error)}</p>` : ""}`;
 }
 
 // ------------------------------------------------------------ employee dialog

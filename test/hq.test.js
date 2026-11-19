@@ -57,3 +57,15 @@ test("CEO runs on Fable 5.2 at high effort; team on Opus 5.5", async () => {
   assert.deepEqual(modelFor(store.employee("ceo")), { model: "claude-fable-5-2", effort: "high" });
   assert.equal(modelFor(store.employee("eng1")).model, "claude-opus-5-5");
 });
+
+test("debate panel: Naruto supports, Sasuke challenges, Judge rules (simulation)", async () => {
+  const debate = await import("../src/debate.js");
+  const d = debate.startDebate({ question: "Launch the paid plan next week?" });
+  assert.throws(() => debate.startDebate({ question: "second" }), /already running/);
+  while (d.status === "running") await new Promise((r) => setTimeout(r, 200));
+  assert.equal(d.status, "done");
+  assert.deepEqual(d.turns.map((t) => t.who), ["naruto", "sasuke", "naruto", "sasuke", "judge"]);
+  assert.equal(d.endedBy, "CONCEDE");
+  assert.equal(d.verdict.winner, "naruto");
+  assert.equal(debate.PANEL.judge.model, "claude-fable-5-2");
+});

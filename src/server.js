@@ -6,6 +6,7 @@ import * as store from "./store.js";
 import * as hq from "./hq.js";
 import { aiInfo, modelFor } from "./ai.js";
 import { LEVELS } from "./seed.js";
+import * as debate from "./debate.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(here, "..", "public");
@@ -26,7 +27,7 @@ const readBody = (req) => new Promise((resolve, reject) => {
   req.on("end", () => { try { resolve(data ? JSON.parse(data) : {}); } catch { reject(new Error("Invalid JSON")); } });
 });
 
-const publicState = () => ({ ...store.get(), models: Object.fromEntries(store.get().employees.map((e) => [e.id, modelFor(e).model])), levels: LEVELS, ai: aiInfo(), schedule: { ...store.get().schedule, ...hq.scheduleInfo() } });
+const publicState = () => ({ ...store.get(), panel: debate.PANEL, models: Object.fromEntries(store.get().employees.map((e) => [e.id, modelFor(e).model])), levels: LEVELS, ai: aiInfo(), schedule: { ...store.get().schedule, ...hq.scheduleInfo() } });
 
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml" };
 
@@ -48,6 +49,12 @@ const routes = [
   ["POST", /^\/api\/tasks\/([\w-]+)\/run$/, (req, res, [, tid]) => json(res, 200, hq.runTask(tid))],
   ["POST", /^\/api\/brief$/, (req, res) => { background(hq.runMorningBrief(), "Morning brief"); json(res, 202, { ok: true }); }],
   ["POST", /^\/api\/meeting$/, (req, res) => { background(hq.runSundayMeeting(), "Sunday meeting"); json(res, 202, { ok: true }); }],
+  // Debate panel: started on demand only (npm run debate), never by the scheduler or a UI button.
+  ["POST", /^\/api\/debates$/, async (req, res) => json(res, 202, debate.startDebate(await readBody(req)))],
+  ["GET", /^\/api\/debates\/([\w-]+)$/, (req, res, [, did]) => {
+    const d = (store.get().debates || []).find((x) => x.id === did);
+    return d ? json(res, 200, d) : json(res, 404, { error: "Debate not found" });
+  }],
   ["POST", /^\/api\/employees\/([\w-]+)\/skills$/, async (req, res, [, eid]) => {
     const { skillId, on } = await readBody(req);
     json(res, 200, hq.equipSkill(eid, skillId, Boolean(on)));

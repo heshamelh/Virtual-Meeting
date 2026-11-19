@@ -20,6 +20,19 @@ npm start                             # http://127.0.0.1:3000
 | **Levels** | L1 Junior → L6 Executive (thresholds at 0/100/300/700/1500/3000 XP). XP comes from tasks (+25), briefs (+10), meetings (+15) and employee of the week (+50). Skill slots = level + 2. |
 | **Skills library** | 23 built-in skills. Each one is a block of instructions injected into the employee's prompt and has a minimum level. Add your own in the UI, then teach them to employees in their profile. |
 
+## ⚖️ Debate panel (on demand only)
+Three people who exist only to argue about one decision. They're not on the schedule and have no UI button. They run when you ask:
+
+```bash
+npm run debate -- "Should we launch the paid plan next week?" --context "40 beta users, 6 asked about pricing"
+```
+
+- **Naruto** (Opus 5.5) always supports the decision and makes the strongest honest case for it.
+- **Sasuke** (Opus 5.5) challenges it round after round, up to `HQ_DEBATE_ROUNDS` (default 3). He stops when it's clear who's right, and he can concede.
+- **Judge** (Fable 5.2) rules NARUTO, SASUKE or SPLIT and says what the company should actually do.
+
+If the HQ server is running, watch it live in the **Debate Room** tab. Whoever is speaking animates, and the gavel bangs on the verdict. If the server isn't running, the debate runs standalone and is saved anyway. The characters are original designs, not the anime's.
+
 ## Config (env vars)
 
 | Var | Default | |
@@ -29,6 +42,8 @@ npm start                             # http://127.0.0.1:3000
 | `HQ_EFFORT` | `medium` | `low` / `medium` / `high` / `xhigh` / `max` |
 | `HQ_CEO_MODEL` | `claude-fable-5-2` | CEO model ($8/$40 per MTok vs $4/$20 for Opus 5.5) |
 | `HQ_CEO_EFFORT` | `high` | Anthropic's recommended starting effort for Fable 5.2 |
+| `HQ_JUDGE_MODEL` / `HQ_DEBATE_MODEL` | Fable 5.2 / Opus 5.5 | Debate panel models |
+| `HQ_DEBATE_ROUNDS` | `3` | Max Naruto↔Sasuke rounds (1–5) |
 | `PORT` / `HOST` | `3000` / `127.0.0.1` | |
 | `HQ_TOKEN` | — | **Set this before exposing beyond localhost.** Without it, anyone who can reach the server can spend your API credits. |
 | `TZ` | system | Timezone for the schedule, e.g. `TZ=Africa/Cairo` |

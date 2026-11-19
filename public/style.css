@@ -81,8 +81,64 @@ main { padding: 16px 20px 40px; max-width: 1400px; margin: 0 auto; }
 @keyframes lean { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(1.5deg); } }
 @keyframes code-scroll { from { transform: translateY(0); } to { transform: translateY(-24px); } }
 @keyframes steam { 0% { opacity: 0; transform: translateY(2px); } 50% { opacity: .8; } 100% { opacity: 0; transform: translateY(-3px); } }
+/* --- debate room: only the speaker animates; the gavel bangs on the verdict --- */
+.court-wrap { margin-bottom: 14px; }
+.court-svg { display: block; width: 100%; max-width: 760px; height: auto; margin: 0 auto; }
+.court .wall { fill: #1b2130; }
+.court .floor { fill: #0d1117; }
+.court .wood { fill: #6b4226; }
+.court .wood-top { fill: #8b5e3c; }
+.court .seal { fill: #d4af37; opacity: .85; }
+.court .wig { fill: #f0f0f0; }
+.court .podium-label { fill: #f5e6c8; font: 700 11px system-ui, sans-serif; letter-spacing: .12em; }
+.court-caption { text-align: center; margin-top: 8px; }
+.court .bubble rect { fill: #e6edf3; }
+.court .bubble circle { fill: #1b2130; }
+.court .bubble, .court .m-open, .court .point, .court .bang, .court .glow { opacity: 0; }
+.court .glow { fill: none; stroke: #ffd33d; stroke-width: 3; }
+.court .p * { transform-box: fill-box; }
+.court .m-open { transform-origin: center; }
+
+/* the active speaker: mouth moves, speech bubble dots pulse */
+.court[data-speaker=naruto] .naruto .m-open, .court[data-speaker=sasuke] .sasuke .m-open, .court[data-speaker=judge] .judge .m-open { opacity: 1; animation: talk .18s ease-in-out infinite alternate; }
+.court[data-speaker=naruto] .naruto .m-closed, .court[data-speaker=sasuke] .sasuke .m-closed, .court[data-speaker=judge] .judge .m-closed { opacity: 0; }
+.court[data-speaker=naruto] .naruto .bubble, .court[data-speaker=sasuke] .sasuke .bubble, .court[data-speaker=judge] .judge .bubble { opacity: 1; }
+.court .bubble circle:nth-of-type(1) { animation: dot 1s infinite; }
+.court .bubble circle:nth-of-type(2) { animation: dot 1s .2s infinite; }
+.court .bubble circle:nth-of-type(3) { animation: dot 1s .4s infinite; }
+/* Naruto: bounces and pumps the thumbs-up */
+.court[data-speaker=naruto] .naruto .bodyg { animation: bounce .5s ease-in-out infinite alternate; }
+.court[data-speaker=naruto] .naruto .thumb { transform-origin: 0% 100%; animation: pump .35s ease-in-out infinite alternate; }
+/* Sasuke: uncrosses arms, jabs a finger, tilts head */
+.court[data-speaker=sasuke] .sasuke .crossed { opacity: 0; }
+.court[data-speaker=sasuke] .sasuke .point { opacity: 1; transform-origin: 100% 50%; animation: jab .45s ease-in-out infinite alternate; }
+.court[data-speaker=sasuke] .sasuke .head { transform-origin: 50% 100%; animation: tilt 1.4s ease-in-out infinite alternate; }
+/* Judge: raises the gavel while speaking, bangs it on the verdict */
+.court .gavel { transform-origin: 0% 0%; }
+.court[data-speaker=judge] .judge .gavel { transform: rotate(-18deg); }
+.court[data-speaker=judge] .judge .head { transform-origin: 50% 100%; animation: nod 1.6s ease-in-out infinite; }
+.court[data-speaker=verdict] .judge .gavel { animation: bang .7s cubic-bezier(.5, 0, .7, 1) infinite; }
+.court[data-speaker=verdict] .bang { animation: flash .7s infinite; }
+.court[data-winner=naruto] .naruto-glow, .court[data-winner=sasuke] .sasuke-glow { animation: glow 1.2s ease-in-out infinite alternate; }
+.court[data-winner=naruto] .naruto .bodyg { animation: bounce .4s ease-in-out infinite alternate; }
+.court[data-winner=split] .naruto-glow, .court[data-winner=split] .sasuke-glow { opacity: .5; }
+@keyframes talk { from { transform: scaleY(.25); } to { transform: scaleY(1.15); } }
+@keyframes dot { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+@keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+@keyframes pump { from { transform: rotate(0); } to { transform: rotate(-14deg); } }
+@keyframes jab { from { transform: translateX(0); } to { transform: translateX(-6px); } }
+@keyframes tilt { from { transform: rotate(-3deg); } to { transform: rotate(4deg); } }
+@keyframes nod { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(5deg); } }
+@keyframes bang { 0%, 100% { transform: rotate(-30deg); } 45% { transform: rotate(12deg); } 55% { transform: rotate(12deg); } }
+@keyframes flash { 0%, 40% { opacity: 0; } 50% { opacity: 1; } 70%, 100% { opacity: 0; } }
+@keyframes glow { from { opacity: .3; } to { opacity: 1; } }
+.turn { border-left: 3px solid var(--line); padding: 4px 0 4px 12px; margin: 12px 0; }
+.turn-naruto { border-color: #f2c94c; }
+.turn-sasuke { border-color: #6c8cd5; }
+.turn-judge { border-color: #d4af37; background: var(--panel2); border-radius: 0 8px 8px 0; padding: 8px 12px; }
+
 @media (prefers-reduced-motion: reduce) {
-  .desk.is-working * { animation: none !important; }
+  .desk.is-working *, .court * { animation: none !important; }
 }
 .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
 .s-working { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 1.2s infinite; }
