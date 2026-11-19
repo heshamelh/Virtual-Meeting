@@ -1,0 +1,16 @@
+{
+  "name": "ai-company-hq",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Company HQ: a CEO + 15 AI employees with a live office board, morning brief, Sunday meeting, levels and a skills library.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.11.0"
+  }
+}

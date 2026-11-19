@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Company HQ</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="logo">🏢</span>
+    <div>
+      <h1 id="company-name">AI Company HQ</h1>
+      <p id="company-mission" class="muted"></p>
+    </div>
+  </div>
+  <div class="top-right">
+    <span id="ai-badge" class="badge"></span>
+    <span id="live" class="badge live">● live</span>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button data-tab="office" class="active">Office Board</button>
+  <button data-tab="tasks">Tasks</button>
+  <button data-tab="briefs">Morning Brief</button>
+  <button data-tab="meetings">Sunday Meeting</button>
+  <button data-tab="team">Levels</button>
+  <button data-tab="skills">Skills Library</button>
+  <button data-tab="settings">Company</button>
+</nav>
+
+<main>
+  <!-- OFFICE -->
+  <section id="tab-office" class="tab active">
+    <div class="stats" id="stats"></div>
+    <div class="office-layout">
+      <div id="floor" class="floor"></div>
+      <aside class="feed-wrap">
+        <h3>Activity</h3>
+        <ul id="feed" class="feed"></ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- TASKS -->
+  <section id="tab-tasks" class="tab">
+    <form id="task-form" class="card form-row">
+      <select name="employeeId" id="task-emp" required></select>
+      <input name="title" placeholder="Task title, e.g. Write landing page copy for launch" required>
+      <textarea name="details" rows="2" placeholder="Details, context, constraints (optional)"></textarea>
+      <button class="primary">Assign task</button>
+    </form>
+    <div class="filters" id="task-filters"></div>
+    <div id="task-list" class="list"></div>
+  </section>
+
+  <!-- BRIEFS -->
+  <section id="tab-briefs" class="tab">
+    <div class="toolbar">
+      <p class="muted" id="brief-sched"></p>
+      <button class="primary" id="run-brief">Run morning brief now</button>
+    </div>
+    <div class="split">
+      <ul id="brief-list" class="index"></ul>
+      <article id="brief-view" class="doc card"></article>
+    </div>
+  </section>
+
+  <!-- MEETINGS -->
+  <section id="tab-meetings" class="tab">
+    <div class="toolbar">
+      <p class="muted" id="meeting-sched"></p>
+      <button class="primary" id="run-meeting">Run Sunday meeting now</button>
+    </div>
+    <div class="split">
+      <ul id="meeting-list" class="index"></ul>
+      <article id="meeting-view" class="doc card"></article>
+    </div>
+  </section>
+
+  <!-- TEAM / LEVELS -->
+  <section id="tab-team" class="tab">
+    <div id="levels" class="levels"></div>
+    <div id="leaderboard" class="list"></div>
+  </section>
+
+  <!-- SKILLS -->
+  <section id="tab-skills" class="tab">
+    <div class="toolbar">
+      <input id="skill-search" placeholder="Search skills…">
+      <button id="new-skill">+ New skill</button>
+    </div>
+    <div id="skill-grid" class="grid"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="tab-settings" class="tab">
+    <form id="company-form" class="card stack">
+      <label>Company name <input name="name"></label>
+      <label>Mission <textarea name="mission" rows="2"></textarea></label>
+      <label>Priorities (one per line, max 5) <textarea name="priorities" rows="4"></textarea></label>
+      <button class="primary">Save</button>
+    </form>
+  </section>
+</main>
+
+<dialog id="emp-dialog"><div id="emp-body"></div></dialog>
+<dialog id="skill-dialog">
+  <form id="skill-form" class="stack" method="dialog">
+    <h3>Skill</h3>
+    <input type="hidden" name="id">
+    <label>Name <input name="name" required></label>
+    <label>Category <input name="category" placeholder="Engineering, Growth, Custom…"></label>
+    <label>Min level <input name="minLevel" type="number" min="1" max="6" value="1"></label>
+    <label>Description <input name="description"></label>
+    <label>Instructions (injected into the employee's prompt) <textarea name="prompt" rows="5" required></textarea></label>
+    <div class="row"><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save skill</button></div>
+  </form>
+</dialog>
+<div id="toast" class="toast" role="status"></div>
+
+<script src="/app.js" type="module"></script>
+</body>
+</html>
