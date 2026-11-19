@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as store from "./store.js";
 import * as hq from "./hq.js";
-import { aiInfo } from "./ai.js";
+import { aiInfo, modelFor } from "./ai.js";
 import { LEVELS } from "./seed.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -26,7 +26,7 @@ const readBody = (req) => new Promise((resolve, reject) => {
   req.on("end", () => { try { resolve(data ? JSON.parse(data) : {}); } catch { reject(new Error("Invalid JSON")); } });
 });
 
-const publicState = () => ({ ...store.get(), levels: LEVELS, ai: aiInfo(), schedule: { ...store.get().schedule, ...hq.scheduleInfo() } });
+const publicState = () => ({ ...store.get(), models: Object.fromEntries(store.get().employees.map((e) => [e.id, modelFor(e).model])), levels: LEVELS, ai: aiInfo(), schedule: { ...store.get().schedule, ...hq.scheduleInfo() } });
 
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml" };
 
@@ -91,7 +91,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   const ai = aiInfo();
   console.log(`🏢 AI Company HQ running at http://${HOST}:${PORT}`);
-  console.log(ai.enabled ? `🤖 Claude enabled (${ai.model})` : "🧪 Simulation mode — set ANTHROPIC_API_KEY for real AI work");
+  console.log(ai.enabled ? `🤖 Claude enabled — team: ${ai.model}, CEO: ${ai.ceoModel}` : "🧪 Simulation mode — set ANTHROPIC_API_KEY for real AI work");
   hq.startAmbient();
   hq.startScheduler();
 });

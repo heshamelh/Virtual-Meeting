@@ -52,7 +52,38 @@ main { padding: 16px 20px 40px; max-width: 1400px; margin: 0 auto; }
 .desk .name { font-weight: 600; }
 .desk .role { color: var(--muted); font-size: 12px; }
 .desk .act { margin-top: 8px; font-size: 12px; min-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.desk.ambient .act { color: var(--muted); font-style: italic; }
+.desk:not(.is-working) .act { color: var(--muted); }
+
+/* --- animated desk scene: typing when working, sitting still when idle --- */
+.scene { display: block; width: 100%; height: auto; margin: 8px 0 2px; }
+.scene .floor-line { fill: #0d1117; }
+.scene .chair { fill: #3d4450; }
+.scene .desktop { fill: #8b5e3c; }
+.scene .screen { fill: #0b0f14; transition: fill .4s; }
+.scene .led { fill: #d29922; }
+.scene .code-wrap, .scene .steam { opacity: 0; transition: opacity .4s; }
+.scene .steam path { stroke: #8b96a8; stroke-width: 1; fill: none; stroke-linecap: round; }
+.scene .arms-work { display: none; }
+.desk.is-working .arms-work { display: inline; }
+.desk.is-working .arms-rest { display: none; }
+.desk.is-working .screen { fill: #102a43; }
+.desk.is-working .led { fill: var(--green); }
+.desk.is-working .code-wrap, .desk.is-working .steam { opacity: 1; }
+.desk.is-working .code { animation: code-scroll 2.4s linear infinite; }
+.desk.is-working .hand-a { animation: type .26s ease-in-out infinite alternate; }
+.desk.is-working .hand-b { animation: type .26s ease-in-out infinite alternate-reverse; }
+.desk.is-working .head { animation: bob 1.8s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+.desk.is-working .body { animation: lean 3.6s ease-in-out infinite; transform-box: fill-box; transform-origin: 30% 100%; }
+.desk.is-working .steam path { animation: steam 2s ease-in-out infinite; }
+.desk.is-working .steam path + path { animation-delay: 1s; }
+@keyframes type { from { transform: translateY(0); } to { transform: translateY(-2.5px); } }
+@keyframes bob { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(4deg); } }
+@keyframes lean { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(1.5deg); } }
+@keyframes code-scroll { from { transform: translateY(0); } to { transform: translateY(-24px); } }
+@keyframes steam { 0% { opacity: 0; transform: translateY(2px); } 50% { opacity: .8; } 100% { opacity: 0; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) {
+  .desk.is-working * { animation: none !important; }
+}
 .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
 .s-working { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 1.2s infinite; }
 .s-focus { background: var(--accent); }

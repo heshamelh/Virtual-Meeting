@@ -12,8 +12,8 @@ npm start                             # http://127.0.0.1:3000
 
 | Feature | How it works |
 |---|---|
-| **CEO + 15 employees** | Atlas (CEO) plus 15 people across Engineering, Product, Growth, Sales and Ops. Each one has a role, personality, level, XP and equipped skills (`src/seed.js`). |
-| **Live office board** | Server-sent events push state to every open browser. A desk with a green pulsing dot means real work on a Claude call. Grey italic text is *ambient* filler so the office doesn't look dead. Turn it off with `HQ_AMBIENT=0`. |
+| **CEO + 15 employees** | Atlas (CEO) plus 15 people across Engineering, Product, Growth, Sales and Ops. Each one has a role, personality, level, XP and equipped skills (`src/seed.js`). The CEO runs on **Claude Fable 5.2** (high effort); the team runs on Claude Opus 5.5. |
+| **Live office board** | Server-sent events push state to every open browser. Every employee sits at an animated desk. While they're on a real Claude call they type, their monitor scrolls code and their coffee steams. When idle they sit still with the monitor off. Animation only means real work. Optional ambient filler activity: `HQ_AMBIENT=1`. |
 | **Tasks** | Assign a task to anyone. They run it with Claude, using their persona and skills as the system prompt. Each employee works one task at a time; extra tasks queue. |
 | **Morning brief** | Runs daily at `HQ_BRIEF_TIME` (default 08:00). The CEO writes a TL;DR, wins, focus by department, risks and decisions needed, all based on real task data. |
 | **Sunday meeting** | Runs every `HQ_MEETING_DAY` (0 = Sunday) at `HQ_MEETING_TIME` (default 10:00). It produces a scorecard, department updates, decisions, next week's priorities, action items and employee of the week. Action items go to the **backlog**. They don't run automatically, so cost stays under your control. The meeting also rewrites the company priorities. |
@@ -27,6 +27,8 @@ npm start                             # http://127.0.0.1:3000
 | `ANTHROPIC_API_KEY` | — | Enables real AI work |
 | `HQ_MODEL` | `claude-opus-5-5` | Claude model |
 | `HQ_EFFORT` | `medium` | `low` / `medium` / `high` / `xhigh` / `max` |
+| `HQ_CEO_MODEL` | `claude-fable-5-2` | CEO model ($8/$40 per MTok vs $4/$20 for Opus 5.5) |
+| `HQ_CEO_EFFORT` | `high` | Anthropic's recommended starting effort for Fable 5.2 |
 | `PORT` / `HOST` | `3000` / `127.0.0.1` | |
 | `HQ_TOKEN` | — | **Set this before exposing beyond localhost.** Without it, anyone who can reach the server can spend your API credits. |
 | `TZ` | system | Timezone for the schedule, e.g. `TZ=Africa/Cairo` |

@@ -51,3 +51,9 @@ test("morning brief and sunday meeting run in simulation mode", async () => {
   assert.equal(m.actionTaskIds.length, 3);
   assert.ok(store.get().tasks.filter((t) => t.status === "backlog").length >= 3);
 });
+
+test("CEO runs on Fable 5.2 at high effort; team on Opus 5.5", async () => {
+  const { modelFor } = await import("../src/ai.js");
+  assert.deepEqual(modelFor(store.employee("ceo")), { model: "claude-fable-5-2", effort: "high" });
+  assert.equal(modelFor(store.employee("eng1")).model, "claude-opus-5-5");
+});

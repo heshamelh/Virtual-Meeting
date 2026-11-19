@@ -121,12 +121,7 @@ function renderOffice() {
     [S.company.priorities[0] || "—", "#1 priority"],
   ].map(([v, l]) => `<div class="stat"><b>${esc(v)}</b><span>${esc(l)}</span></div>`).join("");
 
-  const depts = DEPT_ORDER.filter((d) => S.employees.some((e) => e.dept === d));
-  $("#floor").innerHTML = depts.map((d) => `
-    <div class="dept"><h3>${d}</h3><div class="desks">
-      ${S.employees.filter((e) => e.dept === d).map(deskHtml).join("")}
-    </div></div>`).join("");
-  $$(".desk").forEach((el) => el.onclick = () => openEmp(el.dataset.id));
+  renderFloor();
 
   $("#feed").innerHTML = S.feed.slice(0, 60).map((f) => {
     const e = f.who && emp(f.who);
@@ -134,16 +129,107 @@ function renderOffice() {
   }).join("") || `<li class="muted">No activity yet.</li>`;
 }
 
-function deskHtml(e) {
-  const q = S.tasks.filter((t) => t.employeeId === e.id && t.status === "queued").length;
-  return `<button class="desk ${e.id === "ceo" ? "ceo" : ""} ${e.real ? "" : "ambient"}" data-id="${e.id}" title="${esc(e.activity)}">
-    ${q ? `<span class="queue">${q} queued</span>` : ""}
-    <div class="who"><span class="avatar">${e.emoji}</span>
-      <div><div class="name">${esc(e.name)}</div><div class="role">${esc(e.role)}</div></div>
-      <span class="lvl">L${e.level}</span></div>
-    <div class="act"><span class="dot s-${e.status}"></span>${esc(e.activity)}</div>
-    ${e.status === "working" ? `<div class="bar"><i style="width:${e.progress}%"></i></div>` : `<div class="bar xp"><i style="width:${xpProgress(e).pct}%"></i></div>`}
-  </button>`;
+// ------------------------------------------------------------ animated desks
+// The floor is built once and then patched in place: replacing the DOM on every
+// update would restart the CSS animations several times a second.
+
+const SKIN = ["#f1c27d", "#e0ac69", "#c68642", "#8d5524", "#ffdbac", "#a86b3c"];
+const HAIR = ["#2b1d0e", "#4a3020", "#151515", "#a0522d", "#d6b370", "#6b6b6b"];
+const SHIRT = { Executive: "#7c4dff", Engineering: "#2f81f7", Product: "#e3762b", Growth: "#db61a2", Sales: "#2da44e", Operations: "#0fa3a3" };
+const hash = (str) => [...str].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+const prettyModel = (m = "") => m.replace(/^claude-/, "").replace(/-(\d+)-(\d+)$/, " $1.$2").replace(/-(\d+)$/, " $1").replace(/^\w/, (c) => c.toUpperCase());
+
+function sceneSvg(e) {
+  const h = hash(e.id);
+  const skin = SKIN[h % SKIN.length], hair = HAIR[(h >> 3) % HAIR.length], shirt = SHIRT[e.dept] || "#6e7681";
+  const colors = ["#7ee787", "#79c0ff", "#d2a8ff", "#ffa657"];
+  // 12 code lines, 4px apart; the group scrolls up 24px and loops, so lines 6-11 repeat 0-5.
+  const lines = Array.from({ length: 12 }, (_, i) => {
+    const j = i % 6, w = 8 + ((h >> j) % 26), x = 102 + (j % 3) * 4;
+    return `<rect x="${x}" y="${16 + i * 4}" width="${w}" height="1.8" rx=".9" fill="${colors[j % 4]}"/>`;
+  }).join("");
+  const tie = e.id === "ceo" ? `<path d="M32 32 L36 32 L35.5 36 L37 47 L34 50 L31 47 L32.5 36 Z" fill="#d4af37"/>` : "";
+  return `<svg class="scene" viewBox="0 0 160 100" aria-hidden="true">
+    <defs><clipPath id="clip-${e.id}"><rect x="99" y="13" width="44" height="26" rx="1"/></clipPath></defs>
+    <rect class="floor-line" x="0" y="94" width="160" height="6"/>
+    <g class="chair">
+      <rect x="14" y="28" width="6" height="40" rx="3"/><rect x="14" y="62" width="38" height="6" rx="3"/>
+      <rect x="30" y="68" width="4" height="18"/><rect x="18" y="86" width="28" height="3" rx="1.5"/>
+      <circle cx="20" cy="91" r="2.5"/><circle cx="44" cy="91" r="2.5"/>
+    </g>
+    <rect x="26" y="55" width="30" height="9" rx="4" fill="#30363d"/>
+    <rect x="50" y="58" width="8" height="30" rx="3" fill="#30363d"/>
+    <rect x="50" y="86" width="15" height="5" rx="2" fill="#0d1117"/>
+    <rect x="66" y="54" width="90" height="6" rx="2" class="desktop"/>
+    <rect x="72" y="60" width="5" height="34" class="desktop"/><rect x="146" y="60" width="5" height="34" class="desktop"/>
+    <rect x="118" y="40" width="5" height="14" fill="#484f58"/><rect x="110" y="52" width="21" height="3" rx="1" fill="#484f58"/>
+    <rect x="96" y="10" width="50" height="32" rx="3" fill="#21262d"/>
+    <rect class="screen" x="99" y="13" width="44" height="26" rx="1"/>
+    <g class="code-wrap" clip-path="url(#clip-${e.id})"><g class="code">${lines}</g></g>
+    <circle class="led" cx="141" cy="40" r="1"/>
+    <rect x="74" y="51" width="26" height="3" rx="1" fill="#6e7681"/>
+    <rect x="136" y="45" width="8" height="9" rx="1.5" fill="#e6edf3"/><path d="M144 47 q4 2.5 0 5" stroke="#e6edf3" stroke-width="1.5" fill="none"/>
+    <g class="steam"><path d="M139 43 q-2 -3 0 -6"/><path d="M142 43 q2 -3 0 -6"/></g>
+    <g class="body">
+      <rect x="23" y="30" width="22" height="31" rx="9" fill="${shirt}"/>${tie}
+      <g class="arms-rest">
+        <line x1="35" y1="37" x2="38" y2="55" stroke="${shirt}" stroke-width="6.5" stroke-linecap="round"/>
+        <line x1="38" y1="55" x2="56" y2="56" stroke="${skin}" stroke-width="5" stroke-linecap="round"/>
+      </g>
+      <g class="arms-work">
+        <line x1="37" y1="36" x2="53" y2="47" stroke="${shirt}" stroke-width="6.5" stroke-linecap="round" opacity=".7"/>
+        <g class="hand-b"><line x1="53" y1="47" x2="81" y2="49.5" stroke="${skin}" stroke-width="5" stroke-linecap="round" opacity=".75"/></g>
+        <line x1="34" y1="38" x2="49" y2="50" stroke="${shirt}" stroke-width="6.5" stroke-linecap="round"/>
+        <g class="hand-a"><line x1="49" y1="50" x2="76" y2="50.5" stroke="${skin}" stroke-width="5" stroke-linecap="round"/></g>
+      </g>
+      <g class="head">
+        <rect x="31" y="24" width="7" height="8" fill="${skin}"/>
+        <circle cx="35" cy="17" r="11" fill="${skin}"/>
+        <path d="M24 18 A11 11 0 0 1 45 12 Q37 9.5 31 14 Q27 17 26.5 23 Z" fill="${hair}"/>
+        <circle cx="42" cy="16.5" r="1.3" fill="#0d1117"/>
+        <path d="M41 22 q2 0.8 3.2 -0.4" stroke="#0d1117" stroke-width="1" fill="none" stroke-linecap="round"/>
+      </g>
+    </g>
+  </svg>`;
+}
+
+let floorKey = "";
+function renderFloor() {
+  const key = S.employees.map((e) => e.id + e.dept).join("|");
+  if (key !== floorKey) {
+    floorKey = key;
+    const depts = DEPT_ORDER.filter((d) => S.employees.some((e) => e.dept === d));
+    $("#floor").innerHTML = depts.map((d) => `
+      <div class="dept"><h3>${d}</h3><div class="desks">
+        ${S.employees.filter((e) => e.dept === d).map((e) => `
+          <button class="desk ${e.id === "ceo" ? "ceo" : ""}" data-id="${e.id}">
+            <span class="queue"></span>
+            <div class="who"><span class="avatar">${e.emoji}</span>
+              <div><div class="name">${esc(e.name)}</div><div class="role">${esc(e.role)}</div></div>
+              <span class="lvl"></span></div>
+            ${sceneSvg(e)}
+            <div class="act"></div>
+            <div class="bar"><i></i></div>
+          </button>`).join("")}
+      </div></div>`).join("");
+    $$(".desk").forEach((el) => el.onclick = () => openEmp(el.dataset.id));
+  }
+  for (const e of S.employees) {
+    const el = $(`.desk[data-id="${e.id}"]`);
+    const working = e.status === "working";
+    const label = working || e.status === "meeting" ? e.activity : "Idle — waiting for a task";
+    const q = S.tasks.filter((t) => t.employeeId === e.id && t.status === "queued").length;
+    el.classList.toggle("is-working", working);
+    el.title = label;
+    el.setAttribute("aria-label", `${e.name}, ${e.role}: ${label}`);
+    $(".queue", el).textContent = q ? `${q} queued` : "";
+    const model = S.models?.[e.id];
+    $(".lvl", el).textContent = `L${e.level}` + (e.id === "ceo" && model ? ` · ${prettyModel(model)}` : "");
+    $(".act", el).innerHTML = `<span class="dot s-${working ? "working" : e.status === "meeting" ? "meeting" : "idle"}"></span>${esc(label)}`;
+    const bar = $(".bar", el);
+    bar.classList.toggle("xp", !working);
+    $("i", bar).style.width = (working ? e.progress : xpProgress(e).pct) + "%";
+  }
 }
 
 function renderTasks() {
@@ -241,7 +327,7 @@ function renderEmp(id) {
   const draft = $("#emp-task-title")?.value || "";
   $("#emp-body").innerHTML = `
     <div class="who" style="display:flex;gap:12px;align-items:center"><span class="avatar" style="font-size:30px;width:52px;height:52px">${e.emoji}</span>
-      <div><h3>${esc(e.name)}</h3><p class="muted">${esc(e.role)} · ${esc(e.dept)} · L${e.level} ${levelTitle(e.level)}</p></div>
+      <div><h3>${esc(e.name)}</h3><p class="muted">${esc(e.role)} · ${esc(e.dept)} · L${e.level} ${levelTitle(e.level)} · 🤖 ${esc(prettyModel(S.models?.[e.id] ?? ""))}</p></div>
       <button style="margin-left:auto" id="emp-close">✕</button></div>
     <p><i>${esc(e.personality)}</i></p>
     <p><span class="dot s-${e.status}"></span>${esc(e.activity)}</p>

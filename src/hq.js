@@ -1,7 +1,7 @@
 // Company operations: tasks, morning brief, Sunday meeting, ambient office life, scheduler.
 import crypto from "node:crypto";
 import * as store from "./store.js";
-import { ask, aiEnabled, personaPrompt } from "./ai.js";
+import { ask, aiEnabled, personaPrompt, modelFor } from "./ai.js";
 
 const XP = { task: 25, brief: 10, meeting: 15, employeeOfWeek: 50 };
 const id = () => crypto.randomUUID().slice(0, 8);
@@ -66,6 +66,7 @@ async function execute(task) {
     if (aiEnabled) {
       const roster = s.employees.filter((x) => x.id !== emp.id);
       result = await ask({
+        emp,
         system: personaPrompt(s.company, emp, s.skills, roster),
         prompt: `Task from ${task.source}: ${task.title}\n\n${task.details || "(no extra details)"}`,
       });
@@ -126,6 +127,15 @@ function extractJson(text) {
   try { return JSON.parse(m[1]); } catch { return null; }
 }
 
+/** The CEO is genuinely working (on a Claude call) while writing the brief or chairing the meeting. */
+function ceoWorking(on, activity) {
+  if (busy.has("ceo")) return; // already shown working on a task; don't clobber it
+  const ceo = store.employee("ceo");
+  store.update(() => Object.assign(ceo, on
+    ? { status: "working", activity, real: true, progress: 0 }
+    : { status: "idle", activity: "Back at desk", real: false, progress: 0 }));
+}
+
 function setEveryone(status, activity) {
   store.update((s) => s.employees.forEach((e) => { if (!e.real) Object.assign(e, { status, activity }); }));
 }
@@ -140,11 +150,13 @@ export async function runMorningBrief() {
   const ceo = store.employee("ceo");
   store.log("☀️ Morning brief started", "ceo", "brief");
   setEveryone("meeting", "Morning brief");
+  ceoWorking(true, "Writing the morning brief");
   try {
     const recent = weekTasks(1);
     let body;
     if (aiEnabled) {
       body = await ask({
+        emp: ceo,
         system: personaPrompt(s.company, ceo, s.skills, s.employees.filter((e) => e.id !== "ceo")),
         prompt: `Write today's morning brief (${today()}) for the founder and the whole team.
 
@@ -170,6 +182,7 @@ Base everything on the status above; if there's little activity, say so plainly 
     return brief;
   } finally {
     briefRunning = false;
+    ceoWorking(false);
     setEveryone("idle", "Back at desk");
   }
 }
@@ -209,11 +222,13 @@ export async function runSundayMeeting() {
   const ceo = store.employee("ceo");
   store.log("🗓️ Sunday all-hands started", "ceo", "meeting");
   setEveryone("meeting", "Sunday all-hands");
+  ceoWorking(true, "Chairing the Sunday all-hands");
   try {
     const week = weekTasks(7);
     let body, data;
     if (aiEnabled) {
       body = await ask({
+        emp: ceo,
         system: personaPrompt(s.company, ceo, s.skills, s.employees.filter((e) => e.id !== "ceo")),
         prompt: `Run the weekly Sunday all-hands meeting (${today()}) and write the minutes.
 You chair. Each department head speaks for their team, using the real data below; do not invent completed work.
@@ -268,6 +283,7 @@ Use only these employee ids: ${s.employees.map((e) => e.id).join(", ")}. 3-8 act
     return meeting;
   } finally {
     meetingRunning = false;
+    ceoWorking(false);
     setEveryone("idle", "Back at desk");
   }
 }
@@ -351,7 +367,7 @@ const AMBIENT = {
 const AMBIENT_STATUS = ["focus", "focus", "focus", "idle", "break", "meeting"];
 
 export function startAmbient(ms = 5000) {
-  if (process.env.HQ_AMBIENT === "0") return;
+  if (process.env.HQ_AMBIENT !== "1") return; // opt-in: idle employees sit still by default
   setInterval(() => {
     const free = store.get().employees.filter((e) => !e.real && e.status !== "working");
     if (!free.length || briefRunning || meetingRunning) return;
