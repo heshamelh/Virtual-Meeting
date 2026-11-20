@@ -407,3 +407,101 @@ export function startScheduler() {
   setTimeout(tick, 3000);
   setInterval(tick, 30_000);
 }
+
+// ---------------------------------------------------------------- goals: CEO delegation
+// The founder gives Atlas a goal. Atlas makes ONE planning call that splits it into tasks for the
+// right people. Tasks land in the backlog under the goal; nothing runs (and nothing is billed)
+// until the founder approves the plan, unless autoRun is set.
+const GOAL_MAX_TASKS = Math.min(10, Math.max(1, Number(process.env.HQ_GOAL_MAX_TASKS || 6)));
+
+export function createGoal({ goal, source = "founder", autoRun = false }) {
+  goal = String(goal ?? "").trim().slice(0, 2000);
+  if (!goal) throw new Error("Goal is required");
+  const g = { id: id(), goal, source, status: "planning", autoRun: Boolean(autoRun), plan: null, taskIds: [], error: null,
+    createdAt: new Date().toISOString() };
+  store.update((s) => (s.goals ||= []).unshift(g));
+  store.log(`🎯 New goal for Atlas: “${goal}”`, "ceo", "task");
+  planGoal(g).catch((e) => {
+    store.update(() => Object.assign(g, { status: "failed", error: String(e.message || e) }));
+    store.log(`❌ Atlas couldn't plan “${goal}”: ${g.error}`, "ceo", "error");
+  });
+  return g;
+}
+
+async function planGoal(g) {
+  const s = store.get();
+  const ceo = store.employee("ceo");
+  ceoWorking(true, `Planning: ${g.goal}`);
+  try {
+    let plan;
+    if (aiEnabled) {
+      const roster = s.employees.map((e) => {
+        const open = s.tasks.filter((t) => t.employeeId === e.id && ["queued", "running"].includes(t.status)).length;
+        return `- ${e.id}: ${e.name}, ${e.role} (${e.dept}), L${e.level}, skills: ${e.skills.join(", ")}, open tasks: ${open}`;
+      }).join("\n");
+      const body = await ask({
+        emp: ceo,
+        system: personaPrompt(s.company, ceo, s.skills, s.employees.filter((e) => e.id !== "ceo")),
+        prompt: `The founder gave you this goal: ${g.goal}
+
+Break it into at most ${GOAL_MAX_TASKS} concrete tasks and assign each to the right person. Fewer is better: only
+create a task if it moves the goal forward this week. Each task is done by one person in one sitting, with no
+back-and-forth, so give each one everything it needs in "details" (context, constraints, expected output).
+You may assign yourself (ceo) only for decisions nobody else can make.
+
+Team (id: name, role, level, skills, current load):
+${roster}
+
+Reply with a short plan for the founder (2-4 sentences: the approach and what you're NOT doing), then a fenced json block exactly like:
+\`\`\`json
+{"summary": "...", "tasks": [{"owner": "<employee id>", "title": "...", "details": "...", "why": "why this person"}]}
+\`\`\``,
+      });
+      plan = extractJson(body);
+      if (!plan?.tasks?.length) throw new Error("Atlas didn't return a task list");
+      plan.summary ||= body.replace(/```json[\s\S]*?```/, "").trim();
+    } else {
+      await sleep(1500);
+      plan = simulatedPlan(g.goal);
+    }
+    const taskIds = [];
+    for (const t of plan.tasks.slice(0, GOAL_MAX_TASKS)) {
+      if (!store.employee(t.owner) || !t.title) continue;
+      const task = createTask({ employeeId: t.owner, title: t.title, details: [t.details, t.why && `Why you: ${t.why}`].filter(Boolean).join("\n\n"),
+        source: `Atlas · goal “${g.goal.slice(0, 60)}”`, run: false });
+      store.update(() => { task.goalId = g.id; });
+      taskIds.push(task.id);
+    }
+    if (!taskIds.length) throw new Error("Plan had no valid tasks");
+    store.update(() => Object.assign(g, { status: "planned", plan: { summary: String(plan.summary || "") }, taskIds }));
+    store.log(`📋 Atlas planned “${g.goal}”: ${taskIds.length} task(s) waiting for your approval`, "ceo", "task");
+    if (g.autoRun) approveGoal(g.id);
+  } finally {
+    ceoWorking(false);
+  }
+}
+
+/** Founder approves the plan: queue every task in it that hasn't run yet. */
+export function approveGoal(goalId) {
+  const g = (store.get().goals || []).find((x) => x.id === goalId);
+  if (!g) throw new Error("Goal not found");
+  if (g.status === "planning") throw new Error("Atlas is still planning");
+  for (const tid of g.taskIds) {
+    const t = store.get().tasks.find((x) => x.id === tid);
+    if (t && ["backlog", "interrupted", "failed"].includes(t.status)) runTask(tid);
+  }
+  store.update(() => { g.status = "approved"; g.approvedAt = new Date().toISOString(); });
+  store.log(`✅ Plan approved: “${g.goal}” — the team is on it`, "ceo", "task");
+  return g;
+}
+
+function simulatedPlan(goal) {
+  return {
+    summary: "Simulation mode — add an API key for a real plan. Atlas would scope the goal, then split it across product, engineering and growth.",
+    tasks: [
+      { owner: "cpo", title: `Scope: ${goal}`.slice(0, 120), details: "Define the problem, the user and what done looks like.", why: "Owns product scope" },
+      { owner: "cto", title: "Technical approach and estimate", details: `For: ${goal}`, why: "Owns architecture" },
+      { owner: "cmo", title: "Launch message and channel", details: `For: ${goal}`, why: "Owns growth" },
+    ],
+  };
+}

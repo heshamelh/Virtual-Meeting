@@ -69,3 +69,44 @@ Work rules:
 - If something is outside your skills, say who on the team should own it.
 - Never invent facts, numbers or sources; label estimates as estimates.`;
 }
+
+// ------------------------------------------------------------ voice
+// Voice is latency-bound: what matters is time to the first spoken sentence, not total length.
+// So: low effort, short replies, and text streamed to the browser as it's generated.
+const VOICE_EFFORT = process.env.HQ_VOICE_EFFORT || "low";
+const VOICE_MODEL = process.env.HQ_VOICE_MODEL || ""; // empty = the employee's own model
+
+export const VOICE_RULES = `
+You are on a live voice call with the founder. Your words are read aloud by text-to-speech.
+- Reply in 1-3 short spoken sentences unless asked for more detail.
+- Plain speech only: no markdown, lists, headings, emoji, code or URLs.
+- Lead with the answer. Ask at most one question back.
+- If the transcript looks garbled, ask them to repeat instead of guessing.`;
+
+/**
+ * Streaming voice turn. Calls onText(delta) for every text chunk; resolves with the full text.
+ * `history` is [{role:"user"|"assistant", content:string}], last entry is the user's turn.
+ */
+export async function askVoice({ system, history, emp, signal, onText }) {
+  if (!client) throw new Error("AI disabled");
+  const model = VOICE_MODEL || modelFor(emp).model;
+  const stream = client.beta.messages.stream({
+    model,
+    max_tokens: 2000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    output_config: { effort: VOICE_EFFORT },
+    system: [{ type: "text", text: system + "\n" + VOICE_RULES, cache_control: { type: "ephemeral" } }],
+    messages: history,
+  }, { signal });
+  let full = "";
+  for await (const ev of stream) {
+    if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
+      full += ev.delta.text;
+      onText(ev.delta.text);
+    }
+  }
+  const msg = await stream.finalMessage();
+  if (msg.stop_reason === "refusal") throw new Error("Model declined");
+  return full.trim();
+}

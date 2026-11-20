@@ -69,3 +69,18 @@ test("debate panel: Naruto supports, Sasuke challenges, Judge rules (simulation)
   assert.equal(d.verdict.winner, "naruto");
   assert.equal(debate.PANEL.judge.model, "claude-fable-5-2");
 });
+
+test("CEO goal: plan lands in backlog, nothing runs until approved", async () => {
+  const g = hq.createGoal({ goal: "Launch the beta waitlist" });
+  assert.equal(g.status, "planning");
+  assert.throws(() => hq.approveGoal(g.id), /still planning/);
+  for (let i = 0; i < 40 && g.status === "planning"; i++) await new Promise((r) => setTimeout(r, 100));
+  assert.equal(g.status, "planned");
+  const tasks = g.taskIds.map((id) => store.get().tasks.find((t) => t.id === id));
+  assert.ok(tasks.length >= 1 && tasks.length <= 6);
+  assert.ok(tasks.every((t) => t.status === "backlog" && t.goalId === g.id));
+  hq.approveGoal(g.id);
+  assert.equal(g.status, "approved");
+  assert.ok(tasks.every((t) => ["queued", "running"].includes(t.status)));
+  assert.throws(() => hq.createGoal({ goal: "  " }), /required/);
+});
