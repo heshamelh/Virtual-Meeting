@@ -62,6 +62,8 @@ const routes = [
   }],
   ["POST", /^\/api\/tasks$/, async (req, res) => json(res, 201, hq.createTask({ ...(await readBody(req)), source: "founder" }))],
   ["POST", /^\/api\/tasks\/([\w-]+)\/run$/, (req, res, [, tid]) => json(res, 200, hq.runTask(tid))],
+  ["POST", /^\/api\/goals$/, async (req, res) => { const b = await readBody(req); json(res, 202, hq.createGoal({ goal: b.goal, autoRun: b.autoRun, source: "founder" })); }],
+  ["POST", /^\/api\/goals\/([\w-]+)\/approve$/, (req, res, [, gid]) => json(res, 200, hq.approveGoal(gid))],
   ["POST", /^\/api\/brief$/, (req, res) => { background(hq.runMorningBrief(), "Morning brief"); json(res, 202, { ok: true }); }],
   ["POST", /^\/api\/meeting$/, (req, res) => { background(hq.runSundayMeeting(), "Sunday meeting"); json(res, 202, { ok: true }); }],
   // Debate panel: started on demand only (npm run debate), never by the scheduler or a UI button.
@@ -82,11 +84,35 @@ const routes = [
     res.on("close", () => { if (!res.writableFinished) ctrl.abort(); }); // founder interrupted: stop paying for tokens
     try {
       if (!aiEnabled) {
+        const said = history.at(-1).content;
+        if (emp.id === "ceo" && /^(please )?(start|kick off|get (the )?team)/i.test(said)) {
+          res.write("On it, I'll plan it now and send you the plan to approve. ");
+          const g = hq.createGoal({ goal: said, source: "voice call" });
+          res.write(`\n[goal] ${JSON.stringify({ id: g.id, goal: g.goal })}`);
+          return res.end();
+        }
         const words = `Simulation mode. I'm ${emp.name}, and I heard: ${history.at(-1).content}. Set an Anthropic API key and I'll give you a real answer.`.split(" ");
         for (const w of words) { if (ctrl.signal.aborted) break; res.write(w + " "); await new Promise((r) => setTimeout(r, 60)); }
       } else {
-        const system = personaPrompt(s.company, emp, s.skills, s.employees.filter((e) => e.id !== emp.id));
-        await askVoice({ system, history, emp, signal: ctrl.signal, onText: (t) => res.write(t) });
+        let system = personaPrompt(s.company, emp, s.skills, s.employees.filter((e) => e.id !== emp.id));
+        if (emp.id === "ceo") system += `\n\nOn this call you can put the team to work. Only when the founder clearly asks you to
+start, kick off or get the team on something, say one sentence confirming it, then end your reply with this exact line:
+[[GOAL: <the goal in one self-contained sentence, including any details the founder gave>]]
+You then plan it and the founder approves the plan on screen. Never use that line for questions or brainstorming.`;
+        // Forward speech as it streams, but hold back the [[GOAL: ...]] marker so it's never read aloud.
+        let held = "", marker = null;
+        const onText = (t) => {
+          if (marker !== null) { marker += t; return; }
+          held += t;
+          const i = held.indexOf("[[");
+          if (i >= 0) { res.write(held.slice(0, i)); marker = held.slice(i); held = ""; return; }
+          const keep = held.endsWith("[") ? 1 : 0;
+          res.write(held.slice(0, held.length - keep)); held = held.slice(held.length - keep);
+        };
+        await askVoice({ system, history, emp, signal: ctrl.signal, onText });
+        res.write(held);
+        const goal = marker?.match(/\[\[GOAL:\s*([\s\S]+?)\]\]/)?.[1]?.trim();
+        if (goal) { const g = hq.createGoal({ goal, source: "voice call" }); res.write(`\n[goal] ${JSON.stringify({ id: g.id, goal: g.goal })}`); }
       }
     } catch (e) {
       if (!ctrl.signal.aborted) res.write(`\n[error] ${e.message}`);

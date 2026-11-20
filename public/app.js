@@ -247,6 +247,30 @@ function renderTasks() {
   const list = S.tasks.filter((t) => ui.taskFilter === "all" || t.status === ui.taskFilter || (ui.taskFilter === "failed" && t.status === "interrupted"));
   $("#task-list").innerHTML = list.map((t) => taskHtml(t, open.has(t.id))).join("") || `<p class="muted">No tasks here. Assign one above.</p>`;
   $$("#task-list [data-run]").forEach((b) => b.onclick = act(async (ev) => { ev.preventDefault(); await api("POST", `/api/tasks/${b.dataset.run}/run`); toast("Task queued"); }));
+  renderGoals();
+}
+
+function renderGoals() {
+  const goals = (S.goals || []).slice(0, 8);
+  const open = new Set($$("#goal-list details.goal[open]").map((d) => d.dataset.id));
+  $("#goal-list").innerHTML = goals.map((g) => {
+    const tasks = g.taskIds.map((id) => S.tasks.find((t) => t.id === id)).filter(Boolean);
+    const done = tasks.filter((t) => t.status === "done").length;
+    const waiting = g.status === "planned";
+    const label = g.status === "planning" ? "Atlas is planning…" : g.status === "failed" ? "failed"
+      : waiting ? `plan ready: ${tasks.length} task(s) need your OK` : `${done}/${tasks.length} done`;
+    const pill = waiting ? "backlog" : g.status === "failed" ? "failed" : g.status === "planning" ? "queued" : done === tasks.length ? "done" : "running";
+    return `<details class="task goal" data-id="${g.id}" ${open.has(g.id) || waiting ? "open" : ""}>
+      <summary><span class="pill st-${pill}">goal</span> 🧭 <b>${esc(g.goal)}</b>
+        <span class="meta">${esc(label)} · ${esc(g.source)} · ${ago(g.createdAt)} ago</span>
+        ${waiting ? `<button class="primary" data-approve="${g.id}">✅ Approve &amp; run</button>` : ""}</summary>
+      ${g.error ? `<p class="st-failed">Error: ${esc(g.error)}</p>` : ""}
+      ${g.plan?.summary ? `<div class="doc">${md(g.plan.summary)}</div>` : ""}
+      ${tasks.map((t) => taskHtml(t, false)).join("")}
+    </details>`;
+  }).join("");
+  $$("#goal-list [data-approve]").forEach((b) => b.onclick = act(async (ev) => { ev.preventDefault(); await api("POST", `/api/goals/${b.dataset.approve}/approve`); toast("Approved: the team is on it"); }));
+  $$("#goal-list [data-run]").forEach((b) => b.onclick = act(async (ev) => { ev.preventDefault(); await api("POST", `/api/tasks/${b.dataset.run}/run`); toast("Task queued"); }));
 }
 
 function taskHtml(t, open) {
@@ -502,6 +526,12 @@ $$(".tabs button").forEach((b) => b.onclick = () => {
 const initial = location.hash.slice(1);
 if (initial) $(`.tabs button[data-tab="${initial}"]`)?.click();
 
+$("#goal-form").onsubmit = act(async (ev) => {
+  ev.preventDefault();
+  const f = ev.target;
+  await api("POST", "/api/goals", { goal: f.goal.value, autoRun: f.autoRun.checked });
+  f.goal.value = ""; toast("Sent to Atlas. The plan appears here in a moment");
+});
 $("#task-form").onsubmit = act(async (ev) => {
   ev.preventDefault();
   const f = ev.target;
@@ -621,13 +651,24 @@ const voice = (() => {
         const { value, done } = await reader.read();
         if (done) break;
         const chunk = dec.decode(value, { stream: true });
-        full += chunk; buf += chunk; txt.textContent = full;
+        // Everything after "\n[" is a control line ([goal] / [error]), never spoken or shown as speech.
+        const before = full.length; full += chunk;
+        const cut = full.indexOf("\n["), end = cut >= 0 ? cut : full.length;
+        if (end > before) buf += full.slice(before, end);
+        txt.textContent = full.slice(0, end);
         $("#voice-log").scrollTop = 1e9;
         flush(false);
       }
       flush(true);
-      const [reply, err] = full.split("\n[error] ");
+      let [reply, err] = full.split("\n[error] ");
       if (err) throw new Error(err);
+      const gm = reply.match(/\n\[goal\] (.+)$/);
+      if (gm) {
+        reply = reply.slice(0, gm.index); txt.textContent = reply;
+        const g = JSON.parse(gm[1]);
+        const note = addTurn("assistant", `📋 New goal: “${g.goal}”. Atlas is planning it. Approve the plan in the Tasks tab.`, "interim");
+        note.querySelector(".who").textContent = "HQ";
+      }
       st.history.push({ role: "assistant", content: reply.trim() });
       if (firstAt) el.title = `first sentence after ${Math.round(firstAt - t0)} ms`;
     } catch (e) {

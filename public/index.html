@@ -48,6 +48,12 @@
 
   <!-- TASKS -->
   <section id="tab-tasks" class="tab">
+    <form id="goal-form" class="card form-row">
+      <input name="goal" placeholder="Give Atlas a goal, e.g. Get our first 10 paying customers this month" required>
+      <label class="check muted"><input type="checkbox" name="autoRun"> Run the plan without asking me</label>
+      <button class="primary">🧭 Send to Atlas</button>
+    </form>
+    <div id="goal-list" class="list"></div>
     <form id="task-form" class="card form-row">
       <select name="employeeId" id="task-emp" required></select>
       <input name="title" placeholder="Task title, e.g. Write landing page copy for launch" required>

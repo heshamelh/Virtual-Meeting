@@ -33,6 +33,18 @@ npm run debate -- "Should we launch the paid plan next week?" --context "40 beta
 
 If the HQ server is running, watch it live in the **Debate Room** tab. Whoever is speaking animates, and the gavel bangs on the verdict. If the server isn't running, the debate runs standalone and is saved anyway. The characters are original designs, not the anime's.
 
+## 🧭 Give Atlas a goal (CEO delegation)
+Atlas, the CEO, turns a goal into work for the team. There are two ways to give one:
+- **Tasks tab → "Give Atlas a goal"**: type it and click **Send to Atlas**.
+- **Voice Call with Atlas**: say "start…", "kick off…" or "get the team on…". Atlas confirms out loud and creates the goal.
+
+What happens next:
+1. Atlas makes **one** planning call. The plan names the owner of each task and says why that person, using everyone's skills and current load.
+2. The tasks land in the **backlog** under the goal. **Nothing runs and nothing is billed until you click ✅ Approve & run.** You can also run single tasks, or tick "Run the plan without asking me" to skip approval.
+3. Each approved task is one Claude call by its owner, so a plan costs 1 planning call + N task calls. N is capped by `HQ_GOAL_MAX_TASKS` (default 6, max 10).
+
+Limits: one level of delegation only. Tasks don't hand off to each other, so a task can't use another task's output. Atlas doesn't review the results.
+
 ## 🎙️ Voice Call
 Open the **Voice Call** tab, pick who to talk to (default: Atlas, the CEO), press **Start call** and talk. They answer out loud.
 
@@ -45,6 +57,7 @@ How it works, and why it's fast:
 
 | Var | Default | |
 |---|---|---|
+| `HQ_GOAL_MAX_TASKS` | `6` | Max tasks Atlas may create per goal (1–10) |
 | `HQ_VOICE_EFFORT` | `low` | Raise it for harder questions; every step up adds seconds before the first word |
 | `HQ_VOICE_MODEL` | employee's own model | e.g. `claude-opus-5-5` to talk to the CEO without Fable's always-on thinking |
 
