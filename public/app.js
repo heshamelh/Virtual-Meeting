@@ -104,7 +104,7 @@ function render() {
   $("#company-mission").textContent = S.company.mission;
   document.title = `${S.company.name} · HQ`;
   $("#ai-badge").textContent = S.ai.enabled ? `🤖 ${S.ai.model}` : "🧪 simulation mode";
-  renderOffice(); renderTasks(); renderDocs("brief"); renderDocs("meeting"); renderTeam(); renderSkills(); renderSettings(); renderDebate();
+  renderOffice(); renderTasks(); renderDocs("brief"); renderDocs("meeting"); renderTeam(); renderSkills(); renderSettings(); renderDebate(); voice.renderRoster();
   // Don't clobber what the user is typing/choosing inside the dialog.
   const typing = $("#emp-dialog").contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
   if (ui.empOpen && !typing) renderEmp(ui.empOpen);
@@ -522,6 +522,190 @@ $("#company-form").onsubmit = act(async (ev) => {
   await api("PATCH", "/api/company", { name: f.name.value, mission: f.mission.value, priorities: f.priorities.value.split("\n").map((s) => s.trim()).filter(Boolean) });
   delete f.dataset.loaded; toast("Saved");
 });
+
+// ------------------------------------------------------------ voice call
+// Browser speech-to-text -> streamed Claude reply -> browser text-to-speech, one sentence at a time.
+// Latency budget: speech end (~0.5s, browser) + model time to first sentence + TTS start (~0.1s).
+// We start speaking the first complete sentence while the rest is still generating.
+const voice = (() => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const synth = window.speechSynthesis;
+  const st = { on: false, history: [], rec: null, recRunning: false, ctrl: null, speaking: false, pending: 0, interimEl: null, voices: [] };
+  const pref = (k, d) => { try { return localStorage.getItem("voice." + k) ?? d; } catch { return d; } };
+  const save = (k, v) => { try { localStorage.setItem("voice." + k, v); } catch {} };
+
+  const status = (text, cls = "") => { const el = $("#voice-status"); el.textContent = text; el.className = "voice-status muted " + cls; };
+  const empName = () => S?.employees.find((e) => e.id === $("#voice-emp").value)?.name || "Claude";
+
+  function addTurn(role, text, extra = "") {
+    const el = document.createElement("div");
+    el.className = `turn ${role} ${extra}`;
+    el.innerHTML = `<span class="who">${role === "user" ? "You" : esc(empName())}</span><span class="txt"></span>`;
+    el.querySelector(".txt").textContent = text;
+    const log = $("#voice-log"); log.append(el); log.scrollTop = log.scrollHeight;
+    return el;
+  }
+
+  // ---- text-to-speech
+  function loadVoices() {
+    if (!synth) return;
+    const en = synth.getVoices().filter((v) => /^en/i.test(v.lang));
+    // Neural/online voices sound far better than the default robotic ones.
+    const score = (v) => (/natural|neural|premium|enhanced|google|siri/i.test(v.name) ? 2 : 0) + (v.localService ? 0 : 1);
+    st.voices = en.sort((a, b) => score(b) - score(a));
+    const sel = $("#voice-voice"), want = pref("voice", "");
+    sel.innerHTML = st.voices.map((v, i) => `<option value="${i}">${esc(v.name)}</option>`).join("");
+    const i = st.voices.findIndex((v) => v.name === want);
+    sel.value = String(i >= 0 ? i : 0);
+  }
+  function speak(text) {
+    text = text.replace(/[*_#`>|]/g, "").replace(/\s+/g, " ").trim();
+    if (!text || !synth) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.voice = st.voices[Number($("#voice-voice").value)] || null;
+    u.rate = Number($("#voice-rate").value);
+    st.pending++; st.speaking = true;
+    if (!$("#voice-bargein").checked) pauseListening(); // no headphones: don't let the mic hear the speaker
+    status(`${empName()} is speaking…`, "speaking");
+    const done = () => { if (--st.pending <= 0) { st.pending = 0; st.speaking = false; afterSpeaking(); } };
+    u.onend = done; u.onerror = done;
+    synth.speak(u);
+  }
+  function afterSpeaking() {
+    if (st.ctrl) return status(`${empName()} is thinking…`, "thinking");
+    if (st.on) { resumeListening(); status("Listening… go ahead", "listening"); } else status("Idle");
+  }
+
+  // ---- interruption: stop audio and the in-flight request (server aborts the Claude stream too)
+  function stopTalking() {
+    if (st.ctrl) {
+      // Record what was already said, synchronously, so history order stays user/assistant/user.
+      const partial = st.partial?.().trim();
+      if (partial) st.history.push({ role: "assistant", content: partial + " [interrupted]" });
+      st.ctrl.abort(); st.ctrl = null;
+    }
+    synth?.cancel(); st.pending = 0; st.speaking = false;
+  }
+
+  // ---- one turn
+  async function send(text) {
+    text = text.trim();
+    if (!text) return;
+    stopTalking();
+    st.history.push({ role: "user", content: text });
+    addTurn("user", text);
+    const el = addTurn("assistant", "");
+    const txt = el.querySelector(".txt");
+    const ctrl = new AbortController(); st.ctrl = ctrl; st.partial = () => full;
+    status(`${empName()} is thinking…`, "thinking");
+    let full = "", buf = "";
+    const t0 = performance.now(); let firstAt = 0;
+    const flush = (force) => {
+      // Speak whole sentences as soon as they're complete; long clauses break at a comma.
+      let m;
+      while ((m = buf.match(/^([\s\S]*?[.!?…:;](?=\s|$)|[\s\S]{140,}?[,—](?=\s))\s*/))) {
+        if (!firstAt) firstAt = performance.now();
+        speak(m[1]); buf = buf.slice(m[0].length);
+      }
+      if (force && buf.trim()) { speak(buf); buf = ""; }
+    };
+    try {
+      const res = await fetch(`/api/voice/${$("#voice-emp").value}`, {
+        method: "POST", signal: ctrl.signal,
+        headers: { "content-type": "application/json", "x-hq-token": token },
+        body: JSON.stringify({ history: st.history }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+      const reader = res.body.getReader(), dec = new TextDecoder();
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = dec.decode(value, { stream: true });
+        full += chunk; buf += chunk; txt.textContent = full;
+        $("#voice-log").scrollTop = 1e9;
+        flush(false);
+      }
+      flush(true);
+      const [reply, err] = full.split("\n[error] ");
+      if (err) throw new Error(err);
+      st.history.push({ role: "assistant", content: reply.trim() });
+      if (firstAt) el.title = `first sentence after ${Math.round(firstAt - t0)} ms`;
+    } catch (e) {
+      if (e.name === "AbortError") {
+        el.classList.add("interim"); // stopTalking() already saved the partial reply to history
+      } else { txt.textContent = "⚠️ " + e.message; st.history.pop(); }
+    } finally {
+      if (st.ctrl === ctrl) st.ctrl = null;
+      if (!st.speaking) afterSpeaking();
+    }
+  }
+
+  // ---- speech-to-text
+  function makeRec() {
+    const r = new SR();
+    r.continuous = true; r.interimResults = true; r.lang = navigator.language || "en-US";
+    r.onresult = (ev) => {
+      let interim = "", final = "";
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const t = ev.results[i][0].transcript;
+        if (ev.results[i].isFinal) final += t; else interim += t;
+      }
+      // Barge-in: you started talking over the reply -> cut it off immediately.
+      if ((interim + final).trim().length > 2 && (st.speaking || st.ctrl)) stopTalking();
+      if (interim) {
+        st.interimEl ||= addTurn("user", "", "interim");
+        st.interimEl.querySelector(".txt").textContent = interim;
+        status("Listening…", "listening");
+      }
+      if (final.trim()) { st.interimEl?.remove(); st.interimEl = null; send(final); }
+    };
+    r.onend = () => { st.recRunning = false; if (st.on && !st.paused) startRec(); }; // Chrome stops after silence
+    r.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") { toast("⚠️ Microphone blocked: allow it in the address bar"); endCall(); }
+    };
+    return r;
+  }
+  function startRec() { if (st.recRunning || !st.rec) return; try { st.rec.start(); st.recRunning = true; } catch {} }
+  function pauseListening() { st.paused = true; if (st.recRunning) st.rec.abort(); st.interimEl?.remove(); st.interimEl = null; }
+  function resumeListening() { st.paused = false; startRec(); }
+
+  function startCall() {
+    if (!SR) return toast("Speech recognition isn't available in this browser; type instead");
+    st.on = true; st.rec ||= makeRec(); resumeListening();
+    const b = $("#voice-call"); b.textContent = "📞 End call"; b.setAttribute("aria-pressed", "true");
+    status("Listening… go ahead", "listening");
+  }
+  function endCall() {
+    st.on = false; pauseListening(); stopTalking();
+    const b = $("#voice-call"); b.textContent = "🎙️ Start call"; b.setAttribute("aria-pressed", "false");
+    status("Idle");
+  }
+
+  function init() {
+    if (!SR) $("#voice-unsupported").hidden = false;
+    loadVoices(); synth?.addEventListener?.("voiceschanged", loadVoices);
+    $("#voice-rate").value = pref("rate", "1.1");
+    $("#voice-bargein").checked = pref("bargein", "0") === "1";
+    $("#voice-voice").onchange = () => save("voice", st.voices[Number($("#voice-voice").value)]?.name || "");
+    $("#voice-rate").onchange = () => save("rate", $("#voice-rate").value);
+    $("#voice-bargein").onchange = () => save("bargein", $("#voice-bargein").checked ? "1" : "0");
+    $("#voice-call").onclick = () => (st.on ? endCall() : startCall());
+    $("#voice-stop").onclick = () => { stopTalking(); afterSpeaking(); };
+    $("#voice-reset").onclick = () => { stopTalking(); st.history = []; $("#voice-log").innerHTML = ""; afterSpeaking(); };
+    $("#voice-emp").onchange = () => { save("emp", $("#voice-emp").value); $("#voice-reset").click(); };
+    $("#voice-form").onsubmit = (ev) => { ev.preventDefault(); const i = $("#voice-text"); send(i.value); i.value = ""; };
+    document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && (st.speaking || st.ctrl)) { stopTalking(); afterSpeaking(); } });
+  }
+
+  function renderRoster() {
+    const sel = $("#voice-emp");
+    if (sel.options.length === S.employees.length) return;
+    sel.innerHTML = S.employees.map((e) => `<option value="${esc(e.id)}">${esc(e.name)} — ${esc(e.role)}</option>`).join("");
+    sel.value = pref("emp", "ceo"); if (!sel.value) sel.selectedIndex = 0;
+  }
+  return { init, renderRoster };
+})();
+voice.init();
 
 connect();
 setInterval(() => S && renderOffice(), 30_000); // refresh relative times

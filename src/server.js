@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as store from "./store.js";
 import * as hq from "./hq.js";
-import { aiInfo, modelFor } from "./ai.js";
+import { aiInfo, modelFor, aiEnabled, askVoice, personaPrompt } from "./ai.js";
 import { LEVELS } from "./seed.js";
 import * as debate from "./debate.js";
 
@@ -34,6 +34,21 @@ const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".
 // Long-running jobs (brief, meeting) return 202 immediately; results arrive over the live stream.
 const background = (p, label) => p.catch((e) => store.log(`${label} failed: ${e.message}`, "ceo", "error"));
 
+
+// Keep the last 20 turns, strings only, alternating roles, starting and ending with the user.
+function cleanHistory(h) {
+  if (!Array.isArray(h)) return null;
+  const out = [];
+  for (const m of h.slice(-20)) {
+    const role = m?.role === "assistant" ? "assistant" : "user";
+    const content = String(m?.content ?? "").trim().slice(0, 4000);
+    if (!content) continue;
+    if (out.at(-1)?.role === role) out.at(-1).content += "\n" + content; else out.push({ role, content });
+  }
+  while (out[0]?.role === "assistant") out.shift();
+  return out.at(-1)?.role === "user" ? out : null;
+}
+
 const routes = [
   ["GET", /^\/api\/state$/, (req, res) => json(res, 200, publicState())],
   ["GET", /^\/api\/stream$/, (req, res) => {
@@ -54,6 +69,29 @@ const routes = [
   ["GET", /^\/api\/debates\/([\w-]+)$/, (req, res, [, did]) => {
     const d = (store.get().debates || []).find((x) => x.id === did);
     return d ? json(res, 200, d) : json(res, 404, { error: "Debate not found" });
+  }],
+  // Voice: streams the reply as plain text chunks so the browser can start speaking the first sentence early.
+  ["POST", /^\/api\/voice\/([\w-]+)$/, async (req, res, [, eid]) => {
+    const s = store.get();
+    const emp = s.employees.find((e) => e.id === eid);
+    if (!emp) return json(res, 404, { error: "Employee not found" });
+    const history = cleanHistory((await readBody(req)).history);
+    if (!history) return json(res, 400, { error: "history must end with a user turn" });
+    res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-cache", "x-accel-buffering": "no" });
+    const ctrl = new AbortController();
+    res.on("close", () => { if (!res.writableFinished) ctrl.abort(); }); // founder interrupted: stop paying for tokens
+    try {
+      if (!aiEnabled) {
+        const words = `Simulation mode. I'm ${emp.name}, and I heard: ${history.at(-1).content}. Set an Anthropic API key and I'll give you a real answer.`.split(" ");
+        for (const w of words) { if (ctrl.signal.aborted) break; res.write(w + " "); await new Promise((r) => setTimeout(r, 60)); }
+      } else {
+        const system = personaPrompt(s.company, emp, s.skills, s.employees.filter((e) => e.id !== emp.id));
+        await askVoice({ system, history, emp, signal: ctrl.signal, onText: (t) => res.write(t) });
+      }
+    } catch (e) {
+      if (!ctrl.signal.aborted) res.write(`\n[error] ${e.message}`);
+    }
+    res.end();
   }],
   ["POST", /^\/api\/employees\/([\w-]+)\/skills$/, async (req, res, [, eid]) => {
     const { skillId, on } = await readBody(req);

@@ -29,6 +29,7 @@
   <button data-tab="team">Levels</button>
   <button data-tab="skills">Skills Library</button>
   <button data-tab="debate">Debate Room</button>
+  <button data-tab="voice">Voice Call</button>
   <button data-tab="settings">Company</button>
 </nav>
 
@@ -94,6 +95,33 @@
     <div class="split">
       <ul id="debate-list" class="index"></ul>
       <article id="debate-view" class="doc card"></article>
+    </div>
+  </section>
+
+  <!-- VOICE -->
+  <section id="tab-voice" class="tab">
+    <div class="card voice-card">
+      <div class="voice-controls">
+        <label>Talk to <select id="voice-emp"></select></label>
+        <button id="voice-call" class="primary voice-mic" aria-pressed="false">🎙️ Start call</button>
+        <button id="voice-stop" title="Stop talking (Esc)">⏹ Stop</button>
+        <button id="voice-reset" title="Clear the conversation">↺ New call</button>
+      </div>
+      <p id="voice-status" class="voice-status muted">Idle</p>
+      <details class="voice-settings">
+        <summary class="muted">Voice settings</summary>
+        <div class="voice-controls">
+          <label>Voice <select id="voice-voice"></select></label>
+          <label>Speed <input id="voice-rate" type="range" min="0.8" max="1.6" step="0.05" value="1.1"></label>
+          <label class="check"><input id="voice-bargein" type="checkbox"> Interrupt by talking (use headphones, or it hears itself)</label>
+        </div>
+      </details>
+      <p id="voice-unsupported" class="muted" hidden>This browser has no speech recognition. Use Chrome, Edge or Safari, or type below.</p>
+      <div id="voice-log" class="voice-log" aria-live="polite"></div>
+      <form id="voice-form" class="voice-controls">
+        <input id="voice-text" placeholder="…or type and press Enter" autocomplete="off">
+        <button>Send</button>
+      </form>
     </div>
   </section>
 

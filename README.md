@@ -33,6 +33,21 @@ npm run debate -- "Should we launch the paid plan next week?" --context "40 beta
 
 If the HQ server is running, watch it live in the **Debate Room** tab. Whoever is speaking animates, and the gavel bangs on the verdict. If the server isn't running, the debate runs standalone and is saved anyway. The characters are original designs, not the anime's.
 
+## 🎙️ Voice Call
+Open the **Voice Call** tab, pick who to talk to (default: Atlas, the CEO), press **Start call** and talk. They answer out loud.
+
+How it works, and why it's fast:
+- **Speech → text** runs in the browser (Web Speech API). Free, no extra keys. Works in Chrome, Edge and Safari. Firefox has no speech recognition, so type there.
+- **Claude streams the reply** (`POST /api/voice/:id`). The browser speaks each sentence **as soon as it's complete**, so you hear the first sentence while the rest is still being written.
+- **Voice-tuned prompt**: 1–3 spoken sentences, no markdown. Effort defaults to `low` (`HQ_VOICE_EFFORT`), because thinking time is dead air on a call.
+- **Interrupt**: Esc or ⏹ Stop cuts the audio *and* aborts the Claude request, so you stop paying for tokens you won't hear. With headphones, turn on "Interrupt by talking" and just talk over them.
+- The speaker sees the conversation so far (last 20 turns). Calls aren't saved and don't cost XP or create tasks.
+
+| Var | Default | |
+|---|---|---|
+| `HQ_VOICE_EFFORT` | `low` | Raise it for harder questions; every step up adds seconds before the first word |
+| `HQ_VOICE_MODEL` | employee's own model | e.g. `claude-opus-5-5` to talk to the CEO without Fable's always-on thinking |
+
 ## Config (env vars)
 
 | Var | Default | |
